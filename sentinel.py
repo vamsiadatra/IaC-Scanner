@@ -10,7 +10,6 @@ from typing import List, Dict, Pattern, Any, Type
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-# --- Configuration & Enums ---
 
 class Severity(Enum):
     CRITICAL = "CRITICAL"
@@ -38,7 +37,6 @@ class Finding:
             "code_snippet": self.snippet.strip()
         }
 
-# --- Abstract Base Classes (The Framework) ---
 
 class BaseRule(ABC):
     """Abstract base class for a security rule."""
@@ -75,7 +73,7 @@ class BaseScanner(ABC):
             logging.error(f"Error scanning {file_path}: {e}")
         return findings
 
-# --- Concrete Rules (The Logic) ---
+#Logic
 
 class RegexRule(BaseRule):
     """A generic rule based on Regular Expressions."""
@@ -107,14 +105,14 @@ class TerraformOpenSecurityGroupRule(BaseRule):
     def check(self, file_content: str, file_path: str) -> List[Finding]:
         findings = []
         # Look for cidr_blocks = ["0.0.0.0/0"] inside an ingress block
-        # Note: A full HCL parser is better, but this regex handles standard formatting
+        #this regex handles standard formatting
         lines = file_content.splitlines()
         ingress_open = False
         
         for i, line in enumerate(lines):
             if 'ingress' in line:
                 ingress_open = True
-            if 'egress' in line or '}' in line: # simplistic closure detection
+            if 'egress' in line or '}' in line:
                 ingress_open = False
             
             if ingress_open and '0.0.0.0/0' in line:
@@ -134,7 +132,6 @@ class DockerUserRule(BaseRule):
         super().__init__("DKR-001", Severity.MEDIUM, "Container running as root (No USER instruction found)")
 
     def check(self, file_content: str, file_path: str) -> List[Finding]:
-        # If "USER" is present, we assume they switched. If not, it's a finding.
         # This is a file-level check, not a line-level check.
         if not re.search(r'^\s*USER\s+', file_content, re.MULTILINE):
             return [Finding(
@@ -147,12 +144,12 @@ class DockerUserRule(BaseRule):
             )]
         return []
 
-# --- Concrete Scanners ---
+#Scanners
 
 class TerraformScanner(BaseScanner):
     def __init__(self):
         super().__init__()
-        # Register Terraform specific rules
+        #Terraform specific rules
         self.register_rule(TerraformOpenSecurityGroupRule())
         self.register_rule(RegexRule("TF-002", Severity.CRITICAL, "Hardcoded AWS Access Key", r'AWS_ACCESS_KEY_ID\s*=\s*".+"'))
         self.register_rule(RegexRule("TF-003", Severity.CRITICAL, "Hardcoded Private Key", r'-----BEGIN PRIVATE KEY-----'))
@@ -163,7 +160,7 @@ class TerraformScanner(BaseScanner):
 class DockerScanner(BaseScanner):
     def __init__(self):
         super().__init__()
-        # Register Docker specific rules
+        #Docker specific rules
         self.register_rule(DockerUserRule())
         self.register_rule(RegexRule("DKR-002", Severity.CRITICAL, "Exposed SSH Port 22", r'^\s*EXPOSE\s+.*22'))
         self.register_rule(RegexRule("DKR-003", Severity.HIGH, "Use of 'ADD' instead of 'COPY'", r'^\s*ADD\s+'))
@@ -172,7 +169,7 @@ class DockerScanner(BaseScanner):
     def supports_file(self, filename: str) -> bool:
         return filename.endswith('Dockerfile') or filename == 'Dockerfile'
 
-# --- The Core Engine ---
+#Core Engine
 
 class SentinelEngine:
     def __init__(self):
@@ -196,7 +193,6 @@ class SentinelEngine:
 
         print(f"[*] Detected {len(files_to_scan)} files to scan. Starting analysis...")
 
-        # Concurrency: Scan files in parallel using ThreadPool
         with ThreadPoolExecutor(max_workers=5) as executor:
             future_to_file = {
                 executor.submit(scanner.scan_file, fpath): fpath 
@@ -250,7 +246,6 @@ class SentinelEngine:
             print(f"  Code: {f.snippet.strip()}")
             print("-" * 40)
 
-# --- Entry Point ---
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Sentinel: IaC Security Scanner")
